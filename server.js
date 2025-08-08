@@ -1,92 +1,90 @@
 import express from "express";
 import dotenv from "dotenv";
 import { db } from "./db/db.js";
-
-dotenv.config();
 import cors from "cors";
-
-const app = express();
-
 import morgan from "morgan";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import path from "path";
+import { fileURLToPath } from "url";
+
 import userRoutes from "./routes/userRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import uomRoutes from "./routes/uomRoutes.js";
-import path from 'path';
-import { errorHandler,notFound } from "./utils/errorHandler.js";
-import { fileURLToPath } from "url";
+import { errorHandler, notFound } from "./utils/errorHandler.js";
 
+dotenv.config();
 
-
-app.use((req, res, next) => {
-  res.setHeader(
-    "Cache-Control",
-    "no-store, no-cache, must-revalidate, private"
-  );
-  next();
-});
-
-
+const app = express();
 const port = process.env.PORT || 5000;
 
-
-// console.log(process.env.MONGO_URI);
+// DB connection
 db();
 
-
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Security headers and cookie parsing
 app.use(helmet());
 app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
+// Logging for dev
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));
 }
 
-app.use(cors());
+// Prevent caching
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  next();
+});
 
+// ✅ FIXED: CORS CONFIG
+const allowedOrigins = [
+  'https://ubiquitous-bublanina-92e994.netlify.app', // your Netlify frontend
+  'http://localhost:3000' // optional for local dev
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, // ✅ required for cookies
+  })
+);
+
+// API routes
 app.use("/api/users", userRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/category", categoryRoutes);
 app.use("/api/uom", uomRoutes);
 
-
+// Serve frontend in production
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.resolve(__filename);
+const __dirname = path.dirname(__filename);
 
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../frontend/build")));
 
   app.get("*", (req, res) =>
     res.sendFile(path.resolve(__dirname, "../frontend", "build", "index.html"))
   );
 } else {
- app.get("/", (req, res) => {
-  res.json("WELCOME MISA  ");
-});
+  app.get("/", (req, res) => {
+    res.send("WELCOME MISA 🙌");
+  });
 }
 
-
-
-
-
-
-
-
-
-//app.use("/", notFound);
+// Error handling
 app.use(errorHandler);
 
-// console.log(5 + 6, "", 6 * 6);
-
-app.listen(port, console.log(`app is running port  ${port}`));
-
-
-
-
-
+app.listen(port, () => {
+  console.log(`✅ Server running on port ${port}`);
+});
